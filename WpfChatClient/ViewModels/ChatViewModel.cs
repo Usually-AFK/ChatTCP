@@ -25,7 +25,6 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
     private DateTime _lastTypingSent = DateTime.MinValue;
     private readonly DispatcherTimer _typingClearTimer;
     private readonly HashSet<string> _typingUsers = new();
-    private readonly HashSet<string> _displayedMessageIds = new();
     private readonly Dictionary<string, User> _knownUsers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RoomItem> _roomLookup = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ChatMessage>> _roomMessages = new(StringComparer.OrdinalIgnoreCase);
@@ -124,11 +123,6 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
                 {
                     DateTime time;
                     if (!DateTime.TryParse(msg.Timestamp, out time)) time = DateTime.Now;
-
-                    if (!string.IsNullOrWhiteSpace(msg.MessageId))
-                    {
-                        _displayedMessageIds.Add(msg.MessageId);
-                    }
 
                     historyMessages.Add(CreateMessage(msg.Username, time.ToString("HH:mm"), msg.Content, msg.MessageId));
                 }
@@ -428,21 +422,19 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
 
         dispatcher.BeginInvoke(() =>
         {
-            if (!string.IsNullOrWhiteSpace(messageId) && !_displayedMessageIds.Add(messageId))
+            bool isOwn = sender == _chatService.CurrentUsername;
+            Console.WriteLine($"[CHAT] Message from {sender} (room: {normalizedRoomId}, isOwn: {isOwn}): {content}");
+            var message = CreateMessage(sender, time, content, messageId);
+            var wasAdded = TryAddMessageToRoom(normalizedRoomId, message);
+
+            if (!wasAdded)
             {
                 return;
             }
 
-            bool isOwn = sender == _chatService.CurrentUsername;
-            Console.WriteLine($"[CHAT] Message from {sender} (room: {normalizedRoomId}, isOwn: {isOwn}): {content}");
-
             if (string.Equals(normalizedRoomId, CurrentRoomId, StringComparison.OrdinalIgnoreCase))
             {
-                var message = CreateMessage(sender, time, content, messageId);
-                if (TryAddMessageToRoom(normalizedRoomId, message))
-                {
-                    Messages.Add(message);
-                }
+                Messages.Add(message);
 
                 // If a message is received from someone typing, remove them from typing list
                 if (_typingUsers.Remove(sender))
@@ -453,8 +445,6 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
             }
             else if (_roomLookup.TryGetValue(normalizedRoomId, out var room))
             {
-                var message = CreateMessage(sender, time, content, messageId);
-                TryAddMessageToRoom(normalizedRoomId, message);
                 room.UnreadCount++;
             }
 
