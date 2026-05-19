@@ -1,0 +1,33 @@
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Visual Studio / .NET local files
+.vs/
+*.user
+*.suo
+*.rsuser
+*.lscache
+*.nupkg
+TestResults/
+
+# Local runtime data
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Local assistant / scratch files
+.qodo/
+.superpowers/
+docs/superpowers/
+Prompt.md
+image.png
+ChatServer/image.png
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

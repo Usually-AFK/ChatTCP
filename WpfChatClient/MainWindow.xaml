@@ -1,0 +1,35 @@
+<ui:FluentWindow x:Class="WpfChatClient.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:vm="clr-namespace:WpfChatClient.ViewModels"
+        xmlns:views="clr-namespace:WpfChatClient.Views"
+        Title="Glass Chat" Height="620" Width="860"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Background="Transparent">
+
+    <ui:FluentWindow.Resources>
+        <DataTemplate DataType="{x:Type vm:ConnectViewModel}">
+            <views:ConnectView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ChatViewModel}">
+            <views:ChatView />
+        </DataTemplate>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#20FFFFFF" Offset="0" />
+                <GradientStop Color="#05FFFFFF" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+        <ui:TitleBar Title="💬 Glass Chat"
+                     VerticalAlignment="Top"
+                     Background="Transparent" />
+
+        <ContentControl Content="{Binding CurrentView}" Margin="0,32,0,0" />
+    </Grid>
+</ui:FluentWindow>

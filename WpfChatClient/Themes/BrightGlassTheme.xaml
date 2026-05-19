@@ -1,0 +1,74 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Liquid Glass Brushes -->
+    <LinearGradientBrush x:Key="LiquidGlassBackground" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#B9B8FF" Offset="0"/>
+        <GradientStop Color="#D7C5FF" Offset="0.32"/>
+        <GradientStop Color="#BFE9FF" Offset="0.62"/>
+        <GradientStop Color="#FFD1EA" Offset="1"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="BrightGlassMain" Color="#B8FFFFFF"/>
+    <SolidColorBrush x:Key="BrightGlassSidebar" Color="#8FFFFFFF"/>
+    <SolidColorBrush x:Key="BrightGlassPanel" Color="#A8FFFFFF"/>
+    <SolidColorBrush x:Key="BrightGlassSoft" Color="#66FFFFFF"/>
+    <SolidColorBrush x:Key="BrightGlassBorder" Color="#CCFFFFFF"/>
+    <SolidColorBrush x:Key="GlassBorderBrush" Color="#CCFFFFFF"/>
+    <SolidColorBrush x:Key="BrightModernCyan" Color="#4ECDC4"/>
+    <SolidColorBrush x:Key="LiquidAccent" Color="#7C8CFF"/>
+    <SolidColorBrush x:Key="LiquidAccentSoft" Color="#337C8CFF"/>
+    <SolidColorBrush x:Key="LiquidOwnBubble" Color="#CDEFFFFF"/>
+    <SolidColorBrush x:Key="LiquidIncomingBubble" Color="#D9FFFFFF"/>
+    
+    <!-- Contrasting Text -->
+    <SolidColorBrush x:Key="BrightTextPrimary" Color="#263142"/>
+    <SolidColorBrush x:Key="BrightTextSecondary" Color="#667085"/>
+    <SolidColorBrush x:Key="BrightTextMuted" Color="#7B8496"/>
+
+    <Style x:Key="LiquidGlassPanel" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource BrightGlassPanel}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BrightGlassBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="22"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.12" Color="#5B6EA8"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Updated Glass Card Style -->
+    <Style x:Key="BrightGlassCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource LiquidIncomingBubble}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BrightGlassBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="18"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.10" Color="#6B7BC4"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Glass TextBox Style for Bright Theme -->
+    <Style x:Key="BrightGlassTextBox" TargetType="ui:TextBox" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" BasedOn="{StaticResource {x:Type ui:TextBox}}">
+        <Setter Property="Background" Value="#B8FFFFFF"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BrightGlassBorder}"/>
+        <Setter Property="Foreground" Value="{StaticResource BrightTextPrimary}"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#7C8CFF" BlurRadius="12" Opacity="0.08" ShadowDepth="0"/>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource LiquidAccent}"/>
+                <Setter Property="Effect">
+                    <Setter.Value>
+                        <DropShadowEffect Color="#7C8CFF" BlurRadius="16" Opacity="0.28" ShadowDepth="0"/>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>
