@@ -25,9 +25,22 @@ public partial class MainViewModel : ObservableObject, IRecipient<ConnectionSucc
     {
         try
         {
-            // Navigate to ChatViewModel on successful connection
-            var chatVM = _serviceProvider.GetRequiredService<ChatViewModel>();
-            CurrentView = chatVM;
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            void SwitchToChatView()
+            {
+                // Navigate to ChatViewModel on successful connection
+                var chatVM = _serviceProvider.GetRequiredService<ChatViewModel>();
+                CurrentView = chatVM;
+            }
+
+            if (dispatcher == null)
+            {
+                SwitchToChatView();
+            }
+            else
+            {
+                dispatcher.BeginInvoke((Action)SwitchToChatView);
+            }
         }
         catch (Exception ex)
         {

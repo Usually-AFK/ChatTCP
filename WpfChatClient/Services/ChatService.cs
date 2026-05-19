@@ -140,12 +140,16 @@ public class ChatService : IChatService
                 Data = JsonSerializer.SerializeToElement(new JoinData { Username = _lastUsername! })
             }).ConfigureAwait(false);
 
+            await WaitForJoinAcceptedAsync(reader, cts.Token).ConfigureAwait(false);
+
             _client = client;
             _stream = stream;
             _reader = reader;
             _writer = writer;
             _cts = cts;
             _isConnected = true;
+
+            ConnectionRestored?.Invoke();
 
             var connectionId = ++_connectionId;
             Console.WriteLine($"[CLIENT] connect success: connection #{connectionId}");
@@ -354,7 +358,11 @@ public class ChatService : IChatService
         {
             while (!token.IsCancellationRequested && _isConnected && connectionId == _connectionId)
             {
-                bool sent = await TrySendPacketAsync(new Packet { Type = PacketType.Heartbeat }, token).ConfigureAwait(false);
+                bool sent = await TrySendPacketAsync(new Packet
+                {
+                    Type = PacketType.Heartbeat,
+                    Data = JsonSerializer.SerializeToElement(new HeartbeatData())
+                }, token).ConfigureAwait(false);
                 if (!sent && !token.IsCancellationRequested)
                 {
                     await HandleDisconnectAsync(connectionId, "heartbeat send failed").ConfigureAwait(false);
@@ -517,7 +525,6 @@ public class ChatService : IChatService
                         _connectionLock.Release();
                     }
 
-                    ConnectionRestored?.Invoke();
                     break;
                 }
                 catch (OperationCanceledException)

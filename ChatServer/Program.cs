@@ -478,7 +478,11 @@ namespace ChatServer
 
                     case PacketType.Heartbeat:
                         // Optionally respond with a Heartbeat packet to confirm the server is alive
-                        await session.SendPacketAsync(new Packet { Type = PacketType.Heartbeat });
+                        await session.SendPacketAsync(new Packet
+                        {
+                            Type = PacketType.Heartbeat,
+                            Data = JsonSerializer.SerializeToElement(new HeartbeatData())
+                        });
                         break;
                         
                     default:

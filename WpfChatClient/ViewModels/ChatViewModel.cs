@@ -30,6 +30,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
     private readonly Dictionary<string, List<ChatMessage>> _roomMessages = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<string>> _roomMessageIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _hasJoinedRooms;
+    private bool _hasConnectedOnce;
 
     [ObservableProperty]
     private string _messageText = "";
@@ -85,6 +86,19 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
         _chatService.ConnectionRestored += OnConnectionRestored;
 
         IsConnected = _chatService.IsConnected;
+        if (IsConnected)
+        {
+            _hasConnectedOnce = true;
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null)
+            {
+                _ = InitializeAfterConnectAsync();
+            }
+            else
+            {
+                dispatcher.BeginInvoke(() => _ = InitializeAfterConnectAsync());
+            }
+        }
 
         InitializeRooms();
         SelectedRoom = Rooms.FirstOrDefault(r => r.Id.Equals(CurrentRoomId, StringComparison.OrdinalIgnoreCase)) ?? Rooms.FirstOrDefault();
@@ -318,8 +332,20 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
 
     public void Receive(ConnectionSuccessMessage message)
     {
-        IsConnected = true;
-        _ = InitializeAfterConnectAsync();
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null)
+        {
+            IsConnected = true;
+            _ = InitializeAfterConnectAsync();
+            return;
+        }
+
+        dispatcher.BeginInvoke(() =>
+        {
+            IsConnected = true;
+            _hasConnectedOnce = true;
+            _ = InitializeAfterConnectAsync();
+        });
     }
 
     private async Task InitializeAfterConnectAsync()
@@ -351,13 +377,26 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher == null) return;
 
+        var isReconnect = _hasConnectedOnce;
+        _hasConnectedOnce = true;
+
         dispatcher.BeginInvoke(() =>
         {
             IsConnected = true;
-            AddToast("Reconnected", "Connection restored.", "system", "status");
+            if (isReconnect)
+            {
+                AddToast("Reconnected", "Connection restored.", "system", "status");
+            }
+            else
+            {
+                AddToast("Connected", "Connection established.", "system", "status");
+            }
         });
 
-        _ = RejoinRoomsAsync();
+        if (isReconnect)
+        {
+            _ = RejoinRoomsAsync();
+        }
     }
 
     partial void OnMessageTextChanged(string value)
