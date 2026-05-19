@@ -119,23 +119,18 @@ namespace ChatServer
                 lockTaken = true;
 
                 var json = JsonSerializer.Serialize(packet);
-                await _writer.WriteLineAsync(json).WaitAsync(TimeSpan.FromSeconds(5), Cts.Token);
-                await _writer.FlushAsync().WaitAsync(TimeSpan.FromSeconds(5), Cts.Token);
+                await _writer.WriteLineAsync(json);
+                await _writer.FlushAsync();
                 MarkSeen();
                 return true;
-            }
-            catch (TimeoutException)
-            {
-                RequestDisconnect("send timeout");
-                return false;
             }
             catch (OperationCanceledException)
             {
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
-                RequestDisconnect("send failed");
+                RequestDisconnect($"send failed: {ex.GetType().Name}: {ex.Message}");
                 return false;
             }
             finally
