@@ -76,7 +76,7 @@ namespace ChatServer
     {
         public string SessionId { get; } = Guid.NewGuid().ToString();
         public string Username { get; set; } = "Anonymous";
-        
+
         private readonly TcpClient _client;
         private readonly NetworkStream _stream;
         private readonly StreamReader _reader;
@@ -84,7 +84,7 @@ namespace ChatServer
         private readonly SemaphoreSlim _writeLock = new(1, 1);
         private int _disconnectSignaled;
         private long _lastSeenTicks = DateTime.UtcNow.Ticks;
-        
+
         public CancellationTokenSource Cts { get; } = new();
         public bool IsDisconnectSignaled => Volatile.Read(ref _disconnectSignaled) == 1;
         public DateTime LastSeenUtc => new(Interlocked.Read(ref _lastSeenTicks), DateTimeKind.Utc);
@@ -203,7 +203,7 @@ namespace ChatServer
             {
                 _userSessions.TryRemove(session.Username, out _);
             }
-            
+
             // Remove from all rooms
             foreach (var room in _roomMembers)
             {
@@ -380,7 +380,7 @@ namespace ChatServer
                             {
                                 LogInfo($"[JOIN] duplicate join packet ignored for {session.Username}");
                             }
-                            
+
                             await BroadcastUserListAsync();
                         }
                         break;
@@ -393,17 +393,17 @@ namespace ChatServer
                             string messageId = string.IsNullOrWhiteSpace(chatData.MessageId) ? Guid.NewGuid().ToString("N") : chatData.MessageId;
                             string roomId = string.IsNullOrWhiteSpace(chatData.RoomId) ? "General" : chatData.RoomId;
                             LogMessage($"[{DateTime.Now:HH:mm:ss}] [{roomId}] {session.Username}: {chatData.Content}");
-                            
+
                             var responsePacket = new Packet
                             {
                                 Type = PacketType.ChatMessage,
-                                Data = JsonSerializer.SerializeToElement(new ChatMessageData 
-                                { 
+                                Data = JsonSerializer.SerializeToElement(new ChatMessageData
+                                {
                                     MessageId = messageId,
                                     RoomId = roomId,
-                                    Username = session.Username, 
-                                    Content = chatData.Content, 
-                                    Timestamp = timestamp 
+                                    Username = session.Username,
+                                    Content = chatData.Content,
+                                    Timestamp = timestamp
                                 })
                             };
 
@@ -424,7 +424,7 @@ namespace ChatServer
                         {
                             string timestamp = DateTime.Now.ToString("o");
                             LogMessage($"[{DateTime.Now:HH:mm:ss}] [DM] {session.Username} -> {privateData.Recipient}: {privateData.Content}");
-                            
+
                             var recipientSession = _clients.GetByUsername(privateData.Recipient);
                             if (recipientSession != null)
                             {
@@ -450,7 +450,7 @@ namespace ChatServer
                         {
                             LogInfo($"[ROOM] {session.Username} joined room {roomJoinData.RoomId}");
                             _clients.AddToRoom(session.SessionId, roomJoinData.RoomId);
-                            
+
                             await session.SendPacketAsync(new Packet
                             {
                                 Type = PacketType.SystemMessage,
@@ -467,10 +467,10 @@ namespace ChatServer
                             await _clients.BroadcastAsync(new Packet
                             {
                                 Type = PacketType.Typing,
-                                Data = JsonSerializer.SerializeToElement(new TypingData 
-                                { 
-                                    Username = session.Username, 
-                                    IsTyping = typingData.IsTyping 
+                                Data = JsonSerializer.SerializeToElement(new TypingData
+                                {
+                                    Username = session.Username,
+                                    IsTyping = typingData.IsTyping
                                 })
                             }, excludeSessionId: session.SessionId);
                         }
@@ -484,7 +484,7 @@ namespace ChatServer
                             Data = JsonSerializer.SerializeToElement(new HeartbeatData())
                         });
                         break;
-                        
+
                     default:
                         LogWarning($"[!] Unhandled packet type received: {packet.Type}");
                         break;
@@ -546,7 +546,7 @@ namespace ChatServer
         {
             int port = 5000;
             TcpListener listener = new(IPAddress.Any, port);
-            
+
             try
             {
                 listener.Start();
@@ -556,7 +556,7 @@ namespace ChatServer
                 {
                     // Fully asynchronous accept
                     var tcpClient = await listener.AcceptTcpClientAsync();
-                    
+
                     // Fire and forget handling to prevent blocking the accept loop
                     _ = HandleClientAsync(tcpClient);
                 }
@@ -582,12 +582,12 @@ namespace ChatServer
                 {
                     // Await incoming data asynchronously. If client drops abruptly, this may throw.
                     string? line = await session.ReadLineAsync();
-                    
+
                     // A null line indicates the client cleanly closed the connection.
                     if (line == null) break;
 
                     session.MarkSeen();
-                    
+
                     await _router.RouteAsync(session, line);
                 }
             }
@@ -605,7 +605,7 @@ namespace ChatServer
                 // Cleanup on disconnect
                 session.RequestDisconnect("handler ended");
                 bool removed = _clients.Remove(session.SessionId);
-                
+
                 if (removed)
                 {
                     Console.WriteLine($"[SERVER] session removed: {session.SessionId} | Active sessions: {_clients.SessionCount} | Active users: {_clients.UserCount}");

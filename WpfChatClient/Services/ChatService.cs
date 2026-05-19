@@ -236,12 +236,12 @@ public class ChatService : IChatService
         var sent = await TrySendPacketAsync(new Packet
         {
             Type = PacketType.ChatMessage,
-            Data = JsonSerializer.SerializeToElement(new ChatMessageData 
-            { 
+            Data = JsonSerializer.SerializeToElement(new ChatMessageData
+            {
                 MessageId = messageId,
                 RoomId = _activeRoomId,
-                Username = _lastUsername!, 
-                Content = message 
+                Username = _lastUsername!,
+                Content = message
             })
         }).ConfigureAwait(false);
 
@@ -321,7 +321,7 @@ public class ChatService : IChatService
                 {
                     break;
                 }
-                
+
                 ParseLine(line);
             }
         }
