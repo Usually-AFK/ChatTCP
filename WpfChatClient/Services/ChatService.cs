@@ -499,12 +499,13 @@ public class ChatService : IChatService
         try
         {
             int retryCount = 0;
-            while (!_isConnected && !_isIntentionallyDisconnected && retryCount < 5 && !token.IsCancellationRequested)
+            while (!_isConnected && !_isIntentionallyDisconnected && !token.IsCancellationRequested)
             {
                 retryCount++;
                 try
                 {
-                    await Task.Delay(2000, token).ConfigureAwait(false);
+                    var delay = retryCount <= 5 ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(5);
+                    await Task.Delay(delay, token).ConfigureAwait(false);
 
                     await _connectionLock.WaitAsync(token).ConfigureAwait(false);
                     try

@@ -336,6 +336,11 @@ public partial class ChatViewModel : ObservableObject, IDisposable, IRecipient<C
         dispatcher.BeginInvoke(() =>
         {
             IsConnected = false;
+            Users.Clear();
+            _knownUsers.Clear();
+            OnlineHeader = "OFFLINE";
+            _typingUsers.Clear();
+            UpdateTypingStatus();
             _hasJoinedRooms = false;
             AddToast("Disconnected", "Connection lost. Reconnecting...", "system", "status");
         });
