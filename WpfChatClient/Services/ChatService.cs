@@ -140,18 +140,6 @@ public class ChatService : IChatService
                 Data = JsonSerializer.SerializeToElement(new JoinData { Username = _lastUsername! })
             }).ConfigureAwait(false);
 
-            await WaitForJoinAcceptedAsync(reader, cts.Token).ConfigureAwait(false);
-
-            var activeRoomId = NormalizeRoomId(_activeRoomId);
-            if (!string.Equals(activeRoomId, "General", StringComparison.Ordinal))
-            {
-                await WritePacketAsync(writer, new Packet
-                {
-                    Type = PacketType.RoomJoin,
-                    Data = JsonSerializer.SerializeToElement(new RoomJoinData { RoomId = activeRoomId })
-                }).ConfigureAwait(false);
-            }
-
             _client = client;
             _stream = stream;
             _reader = reader;
