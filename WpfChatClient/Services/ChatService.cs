@@ -162,8 +162,10 @@ public class ChatService : IChatService
             var connectionId = ++_connectionId;
             Console.WriteLine($"[CLIENT] connect success: connection #{connectionId}");
 
-            _receiveTask = Task.Run(() => ReceiveLoopAsync(connectionId, reader, cts.Token));
-            _heartbeatTask = Task.Run(() => HeartbeatLoopAsync(connectionId, cts.Token));
+            var receiveReader = reader;
+            var connectionToken = cts.Token;
+            _receiveTask = Task.Run(() => ReceiveLoopAsync(connectionId, receiveReader, connectionToken));
+            _heartbeatTask = Task.Run(() => HeartbeatLoopAsync(connectionId, connectionToken));
 
             client = null;
             stream = null;
