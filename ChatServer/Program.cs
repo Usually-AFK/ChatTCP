@@ -119,8 +119,15 @@ namespace ChatServer
                 lockTaken = true;
 
                 var json = JsonSerializer.Serialize(packet);
-                await _writer.WriteLineAsync(json);
+                await _writer.WriteLineAsync(json).WaitAsync(TimeSpan.FromSeconds(5), Cts.Token);
+                await _writer.FlushAsync().WaitAsync(TimeSpan.FromSeconds(5), Cts.Token);
+                MarkSeen();
                 return true;
+            }
+            catch (TimeoutException)
+            {
+                RequestDisconnect("send timeout");
+                return false;
             }
             catch (OperationCanceledException)
             {
@@ -533,6 +540,8 @@ namespace ChatServer
     {
         private static readonly ConnectedClients _clients = new();
         private static readonly MessageRouter _router = new(_clients);
+        private static readonly TimeSpan HeartbeatTimeout = TimeSpan.FromSeconds(75);
+        private static readonly TimeSpan HeartbeatCheckInterval = TimeSpan.FromSeconds(10);
 
         static async Task Main(string[] args)
         {
@@ -619,14 +628,12 @@ namespace ChatServer
 
         static async Task HeartbeatWatchdogAsync(ClientSession session)
         {
-            var timeout = TimeSpan.FromSeconds(20);
-
             try
             {
                 while (!session.Cts.Token.IsCancellationRequested)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(5), session.Cts.Token);
-                    if (DateTime.UtcNow - session.LastSeenUtc > timeout)
+                    await Task.Delay(HeartbeatCheckInterval, session.Cts.Token);
+                    if (DateTime.UtcNow - session.LastSeenUtc > HeartbeatTimeout)
                     {
                         session.RequestDisconnect("heartbeat timeout");
                         break;

@@ -364,13 +364,14 @@ public class ChatService : IChatService
         {
             while (!token.IsCancellationRequested && _isConnected && connectionId == _connectionId)
             {
-                await Task.Delay(5000, token).ConfigureAwait(false);
                 bool sent = await TrySendPacketAsync(new Packet { Type = PacketType.Heartbeat }, token).ConfigureAwait(false);
                 if (!sent && !token.IsCancellationRequested)
                 {
                     await HandleDisconnectAsync(connectionId, "heartbeat send failed").ConfigureAwait(false);
                     break;
                 }
+
+                await Task.Delay(5000, token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -389,12 +390,15 @@ public class ChatService : IChatService
             var packet = JsonSerializer.Deserialize<Packet>(line);
             if (packet == null) return;
 
+            Console.WriteLine($"[CLIENT] packet received: {packet.Type}");
+
             switch (packet.Type)
             {
                 case PacketType.ChatMessage:
                     var chatData = packet.Data.Deserialize<ChatMessageData>();
                     if (chatData != null)
                     {
+                        Console.WriteLine($"[CLIENT] chat packet: room={NormalizeRoomId(chatData.RoomId)}, from={chatData.Username}, id={chatData.MessageId}");
                         _ = _messageCache.SaveMessageAsync(chatData);
                         DateTime time;
                         if (!DateTime.TryParse(chatData.Timestamp, out time)) time = DateTime.Now;
@@ -433,7 +437,10 @@ public class ChatService : IChatService
                     break;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CLIENT] packet parse/dispatch failed: {ex.Message}");
+        }
     }
 
     private async Task HandleDisconnectAsync(int connectionId, string reason)
