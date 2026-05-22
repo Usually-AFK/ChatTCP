@@ -28,6 +28,7 @@ namespace ChatServer
         Heartbeat,
         PrivateMessage,
         RoomJoin,
+        UploadJoin,
         ConnectionRejected,
         FileTransferRequest,
         FileTransferChunk,
@@ -68,6 +69,10 @@ namespace ChatServer
     public class RoomJoinData
     {
         public string RoomId { get; set; } = string.Empty;
+    }
+    public class UploadJoinData
+    {
+        public string Username { get; set; } = string.Empty;
     }
     public class TypingData
     {
@@ -1147,12 +1152,38 @@ namespace ChatServer
         static async Task HandleClientAsync(TcpClient tcpClient)
         {
             using var session = new ClientSession(tcpClient);
-            _clients.Add(session);
+            var isChatSession = false;
+            Task? heartbeatWatchdog = null;
             Console.WriteLine($"[SERVER] session accepted: {session.SessionId} | Active sessions: {_clients.SessionCount}");
-            var heartbeatWatchdog = Task.Run(() => HeartbeatWatchdogAsync(session));
 
             try
             {
+                string? firstLine = await session.ReadLineAsync();
+                if (firstLine == null) return;
+
+                session.MarkSeen();
+
+                if (TryParsePacket(firstLine, out var firstPacket) && firstPacket.Type == PacketType.UploadJoin)
+                {
+                    var uploadJoin = firstPacket.Data.Deserialize<UploadJoinData>();
+                    session.Username = (uploadJoin?.Username ?? "Anonymous").Trim();
+                    if (string.IsNullOrWhiteSpace(session.Username))
+                    {
+                        session.Username = "Anonymous";
+                    }
+
+                    Console.WriteLine($"[UPLOAD] upload session accepted: {session.Username} | {session.SessionId}");
+                    await HandleUploadSessionAsync(session);
+                    return;
+                }
+
+                _clients.Add(session);
+                isChatSession = true;
+                Console.WriteLine($"[SERVER] session registered: {session.SessionId} | Active sessions: {_clients.SessionCount}");
+                heartbeatWatchdog = Task.Run(() => HeartbeatWatchdogAsync(session));
+
+                await _router.RouteAsync(session, firstLine);
+
                 while (!session.Cts.Token.IsCancellationRequested)
                 {
                     // Await incoming data asynchronously. If client drops abruptly, this may throw.
@@ -1179,24 +1210,71 @@ namespace ChatServer
             {
                 // Cleanup on disconnect
                 session.RequestDisconnect("handler ended");
-                bool removed = _clients.Remove(session.SessionId);
-
-                if (removed)
+                if (isChatSession)
                 {
-                    Console.WriteLine($"[SERVER] session removed: {session.SessionId} | Active sessions: {_clients.SessionCount} | Active users: {_clients.UserCount}");
-                }
+                    bool removed = _clients.Remove(session.SessionId);
 
-                if (removed && session.Username != "Anonymous")
+                    if (removed)
+                    {
+                        Console.WriteLine($"[SERVER] session removed: {session.SessionId} | Active sessions: {_clients.SessionCount} | Active users: {_clients.UserCount}");
+                    }
+
+                    if (removed && session.Username != "Anonymous")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"[-] {session.Username} disconnected | Online: {_clients.UserCount}");
+                        Console.ResetColor();
+
+                        await _router.BroadcastSystemMessageAsync($"{session.Username} has left the chat.");
+                        await _router.BroadcastUserListAsync();
+                    }
+
+                    try { if (heartbeatWatchdog != null) await heartbeatWatchdog; } catch { }
+                }
+            }
+        }
+
+        static async Task HandleUploadSessionAsync(ClientSession session)
+        {
+            try
+            {
+                while (!session.Cts.Token.IsCancellationRequested)
                 {
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"[-] {session.Username} disconnected | Online: {_clients.UserCount}");
-                    Console.ResetColor();
+                    string? line = await session.ReadLineAsync();
+                    if (line == null) break;
 
-                    await _router.BroadcastSystemMessageAsync($"{session.Username} has left the chat.");
-                    await _router.BroadcastUserListAsync();
+                    session.MarkSeen();
+                    await _router.RouteAsync(session, line);
                 }
+            }
+            catch (OperationCanceledException) { }
+            catch (IOException) { }
+            catch (SocketException) { }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[ERROR] Upload session exception ({session.Username}): {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                Console.WriteLine($"[UPLOAD] upload session ended: {session.Username} | {session.SessionId}");
+            }
+        }
 
-                try { await heartbeatWatchdog; } catch { }
+        static bool TryParsePacket(string payload, out Packet packet)
+        {
+            packet = new Packet();
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<Packet>(payload);
+                if (parsed == null) return false;
+                packet = parsed;
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 

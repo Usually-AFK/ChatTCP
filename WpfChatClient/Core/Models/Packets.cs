@@ -16,6 +16,7 @@ public enum PacketType
     Heartbeat,
     PrivateMessage,
     RoomJoin,
+    UploadJoin,
     ConnectionRejected,
     FileTransferRequest,
     FileTransferChunk,
@@ -59,6 +60,11 @@ public class PrivateMessageData
 public class RoomJoinData
 {
     public string RoomId { get; set; } = string.Empty;
+}
+
+public class UploadJoinData
+{
+    public string Username { get; set; } = string.Empty;
 }
 
 public class TypingData

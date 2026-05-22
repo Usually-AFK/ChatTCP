@@ -24,6 +24,12 @@ public class ChatService : IChatService
     private Task? _receiveTask;
     private Task? _heartbeatTask;
     private Task? _reconnectTask;
+    private TcpClient? _uploadClient;
+    private NetworkStream? _uploadStream;
+    private StreamReader? _uploadReader;
+    private StreamWriter? _uploadWriter;
+    private CancellationTokenSource? _uploadCts;
+    private Task? _uploadReceiveTask;
     private string? _lastIp;
     private int _lastPort;
     private string? _lastUsername;
@@ -31,10 +37,14 @@ public class ChatService : IChatService
     private volatile bool _isConnected;
     private volatile bool _isReconnectLoopRunning;
     private volatile bool _isIntentionallyDisconnected = true;
+    private volatile bool _isUploadConnected;
     private string _activeRoomId = "General";
     private int _connectionId;
+    private long _lastPacketReceivedTicks;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly SemaphoreSlim _uploadConnectionLock = new(1, 1);
+    private readonly SemaphoreSlim _uploadWriteLock = new(1, 1);
     private readonly MessageCache _messageCache;
     private readonly ConcurrentDictionary<string, OutgoingTransfer> _outgoingTransfers = new();
     private readonly ConcurrentDictionary<string, IncomingTransfer> _incomingTransfers = new();
@@ -43,6 +53,7 @@ public class ChatService : IChatService
     private readonly string _downloadRoot;
     private readonly string _roomDownloadRoot;
     private const int FileChunkSize = 64 * 1024;
+    private static readonly TimeSpan ReceiveStallTimeout = TimeSpan.FromSeconds(20);
 
     public event MessageReceivedHandler? MessageReceived;
     public event PrivateMessageReceivedHandler? PrivateMessageReceived;
@@ -219,6 +230,7 @@ public class ChatService : IChatService
             _writer = writer;
             _cts = cts;
             _isConnected = true;
+            Interlocked.Exchange(ref _lastPacketReceivedTicks, DateTime.UtcNow.Ticks);
 
             ConnectionRestored?.Invoke();
             _ = ResumePendingIncomingTransfersAsync();
@@ -325,6 +337,8 @@ public class ChatService : IChatService
         if (!_isConnected || string.IsNullOrWhiteSpace(_lastUsername)) return null;
         if (!File.Exists(filePath)) return null;
 
+        if (!await EnsureUploadConnectionAsync().ConfigureAwait(false)) return null;
+
         var transferId = Guid.NewGuid().ToString("N");
         var fileInfo = new FileInfo(filePath);
         var normalizedRoomId = NormalizeRoomId(roomId);
@@ -353,7 +367,7 @@ public class ChatService : IChatService
             Status = FileTransferStatus.Pending
         });
 
-        var sent = await TrySendPacketAsync(new Packet
+        var sent = await TrySendUploadPacketAsync(new Packet
         {
             Type = PacketType.RoomFileUploadRequest,
             Data = JsonSerializer.SerializeToElement(new RoomFileUploadRequestData
@@ -601,6 +615,7 @@ public class ChatService : IChatService
                     break;
                 }
 
+                Interlocked.Exchange(ref _lastPacketReceivedTicks, DateTime.UtcNow.Ticks);
                 ParseLine(line);
             }
         }
@@ -642,6 +657,13 @@ public class ChatService : IChatService
                     Type = PacketType.Heartbeat,
                     Data = JsonSerializer.SerializeToElement(new HeartbeatData())
                 }, token).ConfigureAwait(false);
+
+                var lastReceivedUtc = new DateTime(Interlocked.Read(ref _lastPacketReceivedTicks), DateTimeKind.Utc);
+                if (DateTime.UtcNow - lastReceivedUtc > ReceiveStallTimeout)
+                {
+                    await HandleDisconnectAsync(connectionId, "no incoming packets").ConfigureAwait(false);
+                    break;
+                }
                 if (!sent && !token.IsCancellationRequested)
                 {
                     await HandleDisconnectAsync(connectionId, "heartbeat send failed").ConfigureAwait(false);
@@ -1002,7 +1024,7 @@ public class ChatService : IChatService
                 var payload = Convert.ToBase64String(buffer, 0, read);
                 var isLast = sentBytes + read >= uploadState.TotalBytes;
 
-                var sent = await TrySendPacketAsync(new Packet
+                var sent = await TrySendUploadPacketAsync(new Packet
                 {
                     Type = PacketType.RoomFileUploadChunk,
                     Data = JsonSerializer.SerializeToElement(new RoomFileUploadChunkData
@@ -1410,6 +1432,7 @@ public class ChatService : IChatService
         }
 
         ConnectionLost?.Invoke();
+        CleanupUploadConnection();
 
         if (shouldReconnect)
         {
@@ -1507,6 +1530,8 @@ public class ChatService : IChatService
         {
             _connectionLock.Release();
         }
+
+        CleanupUploadConnection();
     }
 
     private void CleanupConnectionLocked(bool invalidateConnection)
@@ -1531,6 +1556,217 @@ public class ChatService : IChatService
         _cts = null;
         _receiveTask = null;
         _heartbeatTask = null;
+    }
+
+    private async Task<bool> EnsureUploadConnectionAsync(CancellationToken token = default)
+    {
+        if (_isUploadConnected) return true;
+
+        await _uploadConnectionLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            if (_isUploadConnected) return true;
+            if (!_isConnected || string.IsNullOrWhiteSpace(_lastIp) || _lastPort == 0 || string.IsNullOrWhiteSpace(_lastUsername))
+            {
+                return false;
+            }
+
+            CleanupUploadConnectionLocked();
+
+            TcpClient? client = null;
+            NetworkStream? stream = null;
+            StreamReader? reader = null;
+            StreamWriter? writer = null;
+            CancellationTokenSource? cts = null;
+
+            try
+            {
+                client = new TcpClient { NoDelay = true };
+                await client.ConnectAsync(_lastIp!, _lastPort).ConfigureAwait(false);
+
+                stream = client.GetStream();
+                reader = new StreamReader(stream, Encoding.UTF8);
+                writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+                cts = new CancellationTokenSource();
+
+                await WritePacketAsync(writer, new Packet
+                {
+                    Type = PacketType.UploadJoin,
+                    Data = JsonSerializer.SerializeToElement(new UploadJoinData { Username = _lastUsername! })
+                }).ConfigureAwait(false);
+
+                _uploadClient = client;
+                _uploadStream = stream;
+                _uploadReader = reader;
+                _uploadWriter = writer;
+                _uploadCts = cts;
+                _isUploadConnected = true;
+
+                var receiveReader = reader;
+                var receiveToken = cts.Token;
+                _uploadReceiveTask = Task.Run(() => UploadReceiveLoopAsync(receiveReader, receiveToken));
+
+                client = null;
+                stream = null;
+                reader = null;
+                writer = null;
+                cts = null;
+                return true;
+            }
+            catch
+            {
+                SafeDispose(cts);
+                SafeDispose(writer);
+                SafeDispose(reader);
+                SafeDispose(stream);
+                SafeDispose(client);
+                _isUploadConnected = false;
+                return false;
+            }
+        }
+        finally
+        {
+            _uploadConnectionLock.Release();
+        }
+    }
+
+    private async Task<bool> TrySendUploadPacketAsync(Packet packet, CancellationToken token = default)
+    {
+        if (!await EnsureUploadConnectionAsync(token).ConfigureAwait(false)) return false;
+
+        var writer = _uploadWriter;
+        if (writer == null || !_isUploadConnected || token.IsCancellationRequested) return false;
+
+        var lockTaken = false;
+        try
+        {
+            await _uploadWriteLock.WaitAsync(token).ConfigureAwait(false);
+            lockTaken = true;
+
+            if (writer != _uploadWriter || !_isUploadConnected)
+            {
+                return false;
+            }
+
+            await WritePacketAsync(writer, packet).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch
+        {
+            CleanupUploadConnection();
+            return false;
+        }
+        finally
+        {
+            if (lockTaken) _uploadWriteLock.Release();
+        }
+    }
+
+    private async Task UploadReceiveLoopAsync(StreamReader reader, CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested && _isUploadConnected)
+            {
+                string? line = await reader.ReadLineAsync(token).ConfigureAwait(false);
+                if (line == null)
+                {
+                    break;
+                }
+
+                ParseUploadLine(line);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch
+        {
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                CleanupUploadConnection();
+            }
+        }
+    }
+
+    private void ParseUploadLine(string line)
+    {
+        try
+        {
+            var packet = JsonSerializer.Deserialize<Packet>(line);
+            if (packet == null) return;
+
+            switch (packet.Type)
+            {
+                case PacketType.RoomFileUploadResume:
+                    var uploadResume = packet.Data.Deserialize<RoomFileUploadResumeData>();
+                    if (uploadResume != null) _ = HandleRoomFileUploadResumeAsync(uploadResume);
+                    break;
+                case PacketType.SystemMessage:
+                    var systemData = packet.Data.Deserialize<SystemMessageData>();
+                    if (systemData != null)
+                    {
+                        MessageReceived?.Invoke("SYSTEM", DateTime.Now.ToString("HH:mm"), systemData.Message, "", _activeRoomId);
+                    }
+                    break;
+                case PacketType.ConnectionRejected:
+                    var rejectedData = packet.Data.Deserialize<SystemMessageData>();
+                    if (rejectedData != null)
+                    {
+                        MessageReceived?.Invoke("SYSTEM", DateTime.Now.ToString("HH:mm"), rejectedData.Message, "", _activeRoomId);
+                    }
+                    CleanupUploadConnection();
+                    break;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void CleanupUploadConnection()
+    {
+        _uploadConnectionLock.Wait();
+        try
+        {
+            CleanupUploadConnectionLocked();
+        }
+        finally
+        {
+            _uploadConnectionLock.Release();
+        }
+    }
+
+    private void CleanupUploadConnectionLocked()
+    {
+        _isUploadConnected = false;
+        try { _uploadCts?.Cancel(); } catch { }
+
+        SafeDispose(_uploadReader);
+        SafeDispose(_uploadWriter);
+        SafeDispose(_uploadStream);
+        SafeDispose(_uploadClient);
+        SafeDispose(_uploadCts);
+
+        _uploadReader = null;
+        _uploadWriter = null;
+        _uploadStream = null;
+        _uploadClient = null;
+        _uploadCts = null;
+        _uploadReceiveTask = null;
     }
 
     private void ClearConnectionTarget()
