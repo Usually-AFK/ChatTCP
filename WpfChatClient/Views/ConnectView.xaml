@@ -7,42 +7,420 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:ConnectViewModel}"
-             d:DesignHeight="450" d:DesignWidth="800">
+             d:DesignHeight="550" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <!-- Phase visibility converters via DataTriggers approach -->
+        <Style x:Key="ScanningPhase" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CurrentPhase}" Value="Scanning">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ServerListPhase" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CurrentPhase}" Value="ServerList">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="NoServersPhase" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CurrentPhase}" Value="NoServers">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ManualConnectPhase" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CurrentPhase}" Value="ManualConnect">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Spinning animation for the scanning indicator -->
+        <Storyboard x:Key="SpinAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="SpinnerTransform"
+                             Storyboard.TargetProperty="Angle"
+                             From="0" To="360" Duration="0:0:1.2"/>
+        </Storyboard>
+
+        <!-- Server list item template -->
+        <DataTemplate x:Key="ServerItemTemplate">
+            <Border Padding="14,10" Margin="0,3" CornerRadius="10"
+                    Background="#40FFFFFF" BorderBrush="#60FFFFFF" BorderThickness="1"
+                    Cursor="Hand">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="Background" Value="#557C8CFF"/>
+                                <Setter Property="BorderBrush" Value="#7C8CFF"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Server icon -->
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10"
+                            Background="#337C8CFF" Margin="0,0,12,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="🖥️" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Server info -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}" 
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrightTextPrimary}"/>
+                        <TextBlock Text="{Binding DisplayInfo}" 
+                                   FontSize="11" Margin="0,2,0,0"
+                                   Foreground="{StaticResource BrightTextSecondary}"/>
+                    </StackPanel>
+
+                    <!-- Online indicator -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Fill="#43B581" Margin="0,0,6,0"/>
+                        <TextBlock Text="Online" FontSize="11" 
+                                   Foreground="#43B581" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Secondary button style (outline) -->
+        <Style x:Key="SecondaryButton" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Setter Property="Background" Value="#22FFFFFF"/>
+            <Setter Property="Foreground" Value="{StaticResource BrightTextPrimary}"/>
+            <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#40FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
 
     <Grid Background="Transparent">
         <Border Style="{StaticResource BrightGlassCard}" 
                 VerticalAlignment="Center" HorizontalAlignment="Center" 
-                Width="350"
+                Width="420"
                 Padding="30">
-            <StackPanel>
-                <TextBlock Text="Welcome back" FontSize="28" FontWeight="Bold" Foreground="{StaticResource BrightTextPrimary}" HorizontalAlignment="Center" Margin="0,0,0,5"/>
-                <TextBlock Text="Connect to the global chat room" FontSize="13" Foreground="{StaticResource BrightTextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,25"/>
-                
-                <TextBlock Text="Server IP" Foreground="{StaticResource BrightTextSecondary}" FontSize="11" FontWeight="Bold" Margin="2,0,0,5"/>
-                <ui:TextBox Text="{Binding Ip, UpdateSourceTrigger=PropertyChanged}"
-                         Style="{StaticResource BrightGlassTextBox}"
-                         PlaceholderText="Host LAN IP, e.g. 192.168.2.18"
-                         Margin="0,0,0,6"/>
-                <TextBlock Text="Same PC: 127.0.0.1. Classmates: enter the host Wi-Fi IPv4 address from ipconfig."
-                           Foreground="{StaticResource BrightTextSecondary}"
-                           FontSize="11"
-                           TextWrapping="Wrap"
-                           Margin="2,0,0,15"/>
-                
-                <TextBlock Text="Username" Foreground="{StaticResource BrightTextSecondary}" FontSize="11" FontWeight="Bold" Margin="2,0,0,5"/>
-                <ui:TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
-                         Style="{StaticResource BrightGlassTextBox}"
-                         PlaceholderText="Enter your name"
-                         Margin="0,0,0,10"/>
-                
-                <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF6B6B" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+            <Grid>
+                <!-- ========================================= -->
+                <!-- PHASE 1: SCANNING                         -->
+                <!-- ========================================= -->
+                <StackPanel Style="{StaticResource ScanningPhase}" 
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    
+                    <TextBlock Text="🔍 Glass Chat" FontSize="28" FontWeight="Bold" 
+                               Foreground="{StaticResource BrightTextPrimary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="Looking for servers..." FontSize="13" 
+                               Foreground="{StaticResource BrightTextSecondary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,30"/>
 
-                <ui:Button Content="Login" 
-                        Command="{Binding ConnectCommand}" 
-                        Style="{StaticResource ModernButton}"
-                        Height="45"
-                        HorizontalAlignment="Stretch"/>
-            </StackPanel>
+                    <!-- Animated scanning spinner -->
+                    <Grid HorizontalAlignment="Center" Width="50" Height="50" Margin="0,0,0,20">
+                        <Ellipse Width="50" Height="50" Stroke="#227C8CFF" StrokeThickness="3"/>
+                        <Path Data="M25,2 A23,23 0 0 1 48,25" 
+                              Stroke="#7C8CFF" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              RenderTransformOrigin="0.5,0.5">
+                            <Path.RenderTransform>
+                                <RotateTransform x:Name="SpinnerTransform" Angle="0"/>
+                            </Path.RenderTransform>
+                        </Path>
+                    </Grid>
+
+                    <TextBlock Text="{Binding ScanStatus}" FontSize="12" 
+                               Foreground="{StaticResource BrightTextMuted}" 
+                               HorizontalAlignment="Center" TextWrapping="Wrap"
+                               TextAlignment="Center" Margin="0,0,0,20"/>
+
+                    <ui:Button Content="Enter IP Manually" 
+                               Command="{Binding ShowManualConnectCommand}"
+                               Style="{StaticResource SecondaryButton}"
+                               Height="36" HorizontalAlignment="Stretch"
+                               FontSize="12"/>
+                </StackPanel>
+
+                <!-- ========================================= -->
+                <!-- PHASE 2: SERVER LIST (servers found)      -->
+                <!-- ========================================= -->
+                <StackPanel Style="{StaticResource ServerListPhase}">
+                    
+                    <TextBlock Text="Servers Found" FontSize="24" FontWeight="Bold" 
+                               Foreground="{StaticResource BrightTextPrimary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock FontSize="12" 
+                               Foreground="{StaticResource BrightTextSecondary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,18"
+                               TextAlignment="Center">
+                        <Run Text="Select a server to join •"/>
+                        <Run Text="{Binding DiscoveredServers.Count, FallbackValue=0, Mode=OneWay}"/>
+                        <Run Text="found"/>
+                    </TextBlock>
+
+                    <!-- Server list -->
+                    <ListBox ItemsSource="{Binding DiscoveredServers}"
+                             SelectedItem="{Binding SelectedServer}"
+                             ItemTemplate="{StaticResource ServerItemTemplate}"
+                             Background="Transparent" BorderThickness="0"
+                             MaxHeight="160"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             HorizontalContentAlignment="Stretch">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+
+                    <!-- Avatar + Username section -->
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Avatar picker -->
+                        <Border Grid.Column="0" Width="52" Height="52" CornerRadius="26"
+                                Background="#337C8CFF" BorderBrush="#557C8CFF" BorderThickness="2"
+                                Margin="0,0,14,0" Cursor="Hand"
+                                MouseLeftButtonDown="AvatarBorder_MouseLeftButtonDown"
+                                ToolTip="Click to upload avatar">
+                            <Grid>
+                                <!-- Default avatar icon -->
+                                <TextBlock Text="📷" FontSize="22" 
+                                           HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAvatar}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <!-- Loaded avatar image -->
+                                <Ellipse Width="48" Height="48">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAvatar}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{Binding AvatarPath}" Stretch="UniformToFill"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
+                        </Border>
+
+                        <!-- Username input -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Username" Foreground="{StaticResource BrightTextSecondary}" 
+                                       FontSize="11" FontWeight="Bold" Margin="2,0,0,4"/>
+                            <ui:TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
+                                        Style="{StaticResource BrightGlassTextBox}"
+                                        PlaceholderText="Enter your name"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF6B6B" FontSize="12" 
+                               HorizontalAlignment="Center" Margin="0,10,0,0"
+                               TextWrapping="Wrap"/>
+
+                    <!-- Connect + Re-scan + Manual buttons -->
+                    <ui:Button Content="Connect" 
+                               Command="{Binding ConnectToSelectedCommand}"
+                               Style="{StaticResource ModernButton}"
+                               Height="42" Margin="0,12,0,0"
+                               HorizontalAlignment="Stretch" FontSize="14"/>
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:Button Grid.Column="0" Content="🔄 Re-scan"
+                                   Command="{Binding ScanForServersCommand}"
+                                   Style="{StaticResource SecondaryButton}"
+                                   Height="34" HorizontalAlignment="Stretch" FontSize="11"/>
+                        <ui:Button Grid.Column="2" Content="⌨️ Manual IP"
+                                   Command="{Binding ShowManualConnectCommand}"
+                                   Style="{StaticResource SecondaryButton}"
+                                   Height="34" HorizontalAlignment="Stretch" FontSize="11"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- ========================================= -->
+                <!-- PHASE 3: NO SERVERS FOUND                 -->
+                <!-- ========================================= -->
+                <StackPanel Style="{StaticResource NoServersPhase}" 
+                            HorizontalAlignment="Stretch">
+                    
+                    <TextBlock Text="📡" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBlock Text="No Servers Found" FontSize="24" FontWeight="Bold" 
+                               Foreground="{StaticResource BrightTextPrimary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBlock Text="No chat servers were detected on your network." 
+                               FontSize="12" Foreground="{StaticResource BrightTextSecondary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,25"
+                               TextWrapping="Wrap" TextAlignment="Center"/>
+
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF6B6B" FontSize="12" 
+                               HorizontalAlignment="Center" Margin="0,0,0,10"
+                               TextWrapping="Wrap"/>
+
+                    <ui:Button Content="🖥️ Host a Server" 
+                               Command="{Binding HostServerCommand}"
+                               Style="{StaticResource ModernButton}"
+                               Height="42" HorizontalAlignment="Stretch"
+                               FontSize="14" Margin="0,0,0,8"/>
+
+                    <ui:Button Content="⌨️ Enter IP Manually" 
+                               Command="{Binding ShowManualConnectCommand}"
+                               Style="{StaticResource SecondaryButton}"
+                               Height="38" HorizontalAlignment="Stretch"
+                               FontSize="13" Margin="0,0,0,8"/>
+
+                    <ui:Button Content="🔄 Scan Again" 
+                               Command="{Binding ScanForServersCommand}"
+                               Style="{StaticResource SecondaryButton}"
+                               Height="34" HorizontalAlignment="Stretch"
+                               FontSize="12"/>
+                </StackPanel>
+
+                <!-- ========================================= -->
+                <!-- PHASE 4: MANUAL CONNECT (classic mode)    -->
+                <!-- ========================================= -->
+                <StackPanel Style="{StaticResource ManualConnectPhase}">
+                    
+                    <TextBlock Text="Manual Connect" FontSize="24" FontWeight="Bold" 
+                               Foreground="{StaticResource BrightTextPrimary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Text="Enter server IP to connect" FontSize="12" 
+                               Foreground="{StaticResource BrightTextSecondary}" 
+                               HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+                    <TextBlock Text="Server IP" Foreground="{StaticResource BrightTextSecondary}" 
+                               FontSize="11" FontWeight="Bold" Margin="2,0,0,5"/>
+                    <ui:TextBox Text="{Binding Ip, UpdateSourceTrigger=PropertyChanged}"
+                                Style="{StaticResource BrightGlassTextBox}"
+                                PlaceholderText="Host LAN IP, e.g. 192.168.2.18"
+                                Margin="0,0,0,4"/>
+                    <TextBlock Text="Same PC: 127.0.0.1. Classmates: enter the host Wi-Fi IPv4 address."
+                               Foreground="{StaticResource BrightTextMuted}"
+                               FontSize="10" TextWrapping="Wrap" Margin="2,0,0,14"/>
+
+                    <!-- Avatar + Username section -->
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Avatar picker -->
+                        <Border Grid.Column="0" Width="52" Height="52" CornerRadius="26"
+                                Background="#337C8CFF" BorderBrush="#557C8CFF" BorderThickness="2"
+                                Margin="0,0,14,0" Cursor="Hand"
+                                MouseLeftButtonDown="AvatarBorder_MouseLeftButtonDown"
+                                ToolTip="Click to upload avatar">
+                            <Grid>
+                                <TextBlock Text="📷" FontSize="22" 
+                                           HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAvatar}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <Ellipse Width="48" Height="48">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAvatar}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{Binding AvatarPath}" Stretch="UniformToFill"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Username" Foreground="{StaticResource BrightTextSecondary}" 
+                                       FontSize="11" FontWeight="Bold" Margin="2,0,0,4"/>
+                            <ui:TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
+                                        Style="{StaticResource BrightGlassTextBox}"
+                                        PlaceholderText="Enter your name"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF6B6B" FontSize="12" 
+                               HorizontalAlignment="Center" Margin="0,8,0,0"
+                               TextWrapping="Wrap"/>
+
+                    <ui:Button Content="Connect" 
+                               Command="{Binding ConnectCommand}" 
+                               Style="{StaticResource ModernButton}"
+                               Height="42" Margin="0,12,0,0"
+                               HorizontalAlignment="Stretch" FontSize="14"/>
+
+                    <ui:Button Content="← Back to Scan" 
+                               Command="{Binding BackToScanCommand}"
+                               Style="{StaticResource SecondaryButton}"
+                               Height="34" Margin="0,8,0,0"
+                               HorizontalAlignment="Stretch" FontSize="12"/>
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
+
+    <!-- Start the spinner animation when the control loads -->
+    <UserControl.Triggers>
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource SpinAnimation}"/>
+        </EventTrigger>
+    </UserControl.Triggers>
 </UserControl>

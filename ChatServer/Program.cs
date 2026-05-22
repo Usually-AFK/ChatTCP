@@ -1114,6 +1114,17 @@ namespace ChatServer
     // ==========================================
     // 5. SERVER ENTRY POINT
     // ==========================================
+    // ==========================================
+    // DISCOVERY DATA
+    // ==========================================
+    public class DiscoveryResponse
+    {
+        public string HostName { get; set; } = string.Empty;
+        public int Port { get; set; }
+        public int OnlineCount { get; set; }
+        public string ServerVersion { get; set; } = "1.0";
+    }
+
     class Program
     {
         private static readonly ConnectedClients _clients = new();
@@ -1121,6 +1132,8 @@ namespace ChatServer
         private static readonly MessageRouter _router = new(_clients, _roomFiles);
         private static readonly TimeSpan HeartbeatTimeout = TimeSpan.FromSeconds(75);
         private static readonly TimeSpan HeartbeatCheckInterval = TimeSpan.FromSeconds(10);
+        private const int DiscoveryPort = 5001;
+        private const string DiscoveryProbe = "CHATTCP_DISCOVER";
 
         static async Task Main(string[] args)
         {
@@ -1131,6 +1144,9 @@ namespace ChatServer
             {
                 listener.Start();
                 PrintBanner(port);
+
+                // Start UDP discovery responder in the background
+                _ = RunDiscoveryResponderAsync(port);
 
                 while (true)
                 {
@@ -1146,6 +1162,62 @@ namespace ChatServer
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"[CRITICAL] Server failed: {ex.Message}");
                 Console.ResetColor();
+            }
+        }
+
+        static async Task RunDiscoveryResponderAsync(int tcpPort)
+        {
+            UdpClient? udpServer = null;
+            try
+            {
+                udpServer = new UdpClient(new IPEndPoint(IPAddress.Any, DiscoveryPort));
+                udpServer.EnableBroadcast = true;
+                Console.WriteLine($"[DISCOVERY] Listening for UDP probes on port {DiscoveryPort}");
+
+                while (true)
+                {
+                    try
+                    {
+                        var result = await udpServer.ReceiveAsync();
+                        var message = Encoding.UTF8.GetString(result.Buffer);
+
+                        if (message.Trim() == DiscoveryProbe)
+                        {
+                            var hostname = Environment.MachineName;
+                            var response = new DiscoveryResponse
+                            {
+                                HostName = hostname,
+                                Port = tcpPort,
+                                OnlineCount = _clients.UserCount,
+                                ServerVersion = "1.0"
+                            };
+
+                            var responseJson = JsonSerializer.Serialize(response);
+                            var responseBytes = Encoding.UTF8.GetBytes(responseJson);
+                            await udpServer.SendAsync(responseBytes, responseBytes.Length, result.RemoteEndPoint);
+                            Console.WriteLine($"[DISCOVERY] Responded to probe from {result.RemoteEndPoint}");
+                        }
+                    }
+                    catch (SocketException ex)
+                    {
+                        Console.WriteLine($"[DISCOVERY] Socket error: {ex.Message}");
+                        await Task.Delay(1000);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[DISCOVERY] Error: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[DISCOVERY] Failed to start UDP discovery responder: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                udpServer?.Dispose();
             }
         }
 
